@@ -290,7 +290,7 @@ Amota32 係基於 ESP-IDF 編寫而成，關於開發環境的完整安裝流程
 
 ## 4.2 專案建置
 
-#### 專案結構
+### 專案結構
 
 ```
 amota32/
@@ -375,8 +375,8 @@ idf.py monitor
 
 ## 4.3 API Reference
 
-#### (1) 使用流程
-#### 流程圖：
+### (1) 使用流程
+### 流程圖：
 <img src="https://github.com/meiiiii1539/Amota32_img/raw/main/image/swim_lane.jpg" alt="swim_lane" style="width: 100%; height: auto;" />
 
 
@@ -386,15 +386,15 @@ Amota32 提供一支 FreeRTOS 任務 [amota_task()](#amota_task) 來執行 OTA �
 
 <br />
 
-#### (2) 自動授權旗幟
+### (2) 自動授權旗幟
 
 Amota32 定義了一個名為`auth_flag`的旗標來判斷是否自動授權更新。一般來說，`auth_flag`的預設為 `false`，表示用戶需要透過CLI來授權更新，這時使用者可以利用CLI更改設定為自動授權更新，爾後便不須在每次更新時做授權。
 
 <br />
 
-#### (3) 結構體定義
+### (3) 結構體定義
 
-#### 韌體資訊結構體
+### 韌體資訊結構體
 
 Amota32定義了一個結構體類型`FW_INFO`，此類型會有兩個實體，一個為`auo_mesh_fw_attributes`用來儲存 AUO MESH 傳來的新韌體資訊；另一個為`file_info`，它被宣告成一個結構體陣列，用來儲存檔案系統內的檔案資訊。
 
@@ -411,7 +411,7 @@ struct FW_INFO File_info[4];
 
 ```
 
-#### 初始化結構體
+### 初始化結構體
 
 Amota32亦定義了另一個結構體類型`config_t`用來儲存初始化UART、NVS、Spiffs等的所有參數。使用者可以至`config.json`中更改所需的配置，程式會在`amota_initialize()`中將JSON檔內的資訊賦值到結構體實體中。
 ```c
