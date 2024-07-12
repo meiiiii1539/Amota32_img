@@ -20,11 +20,29 @@ Amota32 (**A**uo **M**esh **OTA** for ESP**32**) 是一個在 ESP32 上協助使
   - [3.1 所需硬體](#31-所需硬體)
   - [3.2 所需軟體](#32-所需軟體)
   - [3.3 ESP32 OTA 介紹](#33-esp32-ota-介紹)
+    - [(1) A/B Partition Scheme](#1-ab-partition-scheme)
+    - [(2) 非 OTA 更新(有線更新)](#2-非-ota-更新有線更新)
+    - [(3) 磁碟分區設定](#3-磁碟分區設定)
   - [3.4 SPIFFS 介紹](#34-spiffs-介紹)
 - [4. Usage](#4-usage)
   - [4.1 Configuration](#41-configuration)
+    - [(1) SDK Configuration](#1-sdk-configuration)
+    - [(2) PC 與 ESP32 建立連接](#2-pc-與-esp32-建立連接)
+    - [(3) UART Configuration](#3-uart-configuration)
+      - [連接USB-to-UART Bridge](#連接usb-to-uart-bridge)
+      - [初始化UART](#初始化uart)
   - [4.2 專案建置](#42-專案建置)
+    - [專案結構](#專案結構)
   - [4.3 API Reference](#43-api-reference)
+    - [(1) 使用流程](#1-使用流程)
+    - [流程圖：](#流程圖)
+    - [(2) 自動授權旗幟](#2-自動授權旗幟)
+    - [(3) 結構體定義](#3-結構體定義)
+    - [韌體資訊結構體](#韌體資訊結構體)
+    - [初始化結構體](#初始化結構體)
+    - [(4) Callback Functions](#4-callback-functions)
+      - [Examples](#examples)
+    - [(5) APIs](#5-apis)
     - [void amota\_task(void \*pvParameters);](#void-amota_taskvoid-pvparameters)
     - [void amota\_cli\_uart\_task(void \*pvParameters)](#void-amota_cli_uart_taskvoid-pvparameters)
     - [esp\_err\_t start\_esp32\_ota\_update(const char \*current\_ver, struct FW\_INFO esp\_fw\_info, amota\_callbacks\_t \*callbacks)](#esp_err_t-start_esp32_ota_updateconst-char-current_ver-struct-fw_info-esp_fw_info-amota_callbacks_t-callbacks)
@@ -35,6 +53,7 @@ Amota32 (**A**uo **M**esh **OTA** for ESP**32**) 是一個在 ESP32 上協助使
   - [5.1 安裝 ESP-IDF：使用 VSCODE 擴充套件](#51-安裝-esp-idf使用-vscode-擴充套件)
   - [5.2 安裝 ESP-IDF：手動安裝](#52-安裝-esp-idf手動安裝)
   - [5.3. 配置硬體](#53-配置硬體)
+      - [簡單示意圖](#簡單示意圖)
 
 <a name="Overview"></a>
 <br />
@@ -568,23 +587,51 @@ xTaskCreate(&amota_cli_uart_task, "amota_cli_uart_task", 10000, (void*)&callback
 
 **Examples:**
 
+**方法1：自行創建任務循環等待 OTA_UPDATE_AVAILABLE_BIT**
 ```C
 //呼叫start_esp32_ota_update，以實際運行ESP32的OTA
-while (1) {
+void wait_ota_update_bit(void *pvParameter){
+  while (1) {
     //等待來自amota_task的事件
     EventBits_t event_bits = xEventGroupWaitBits(ota_event_group,
                                                     OTA_UPDATE_AVAILABLE_BIT,
                                                     pdTRUE,
                                                     pdFALSE,
                                                     portMAX_DELAY);
-
     if (event_bits & OTA_UPDATE_AVAILABLE_BIT) {
        //收到這個event bit之後，即可呼叫 做start_esp32_ota_update OTA更新
-        start_esp32_ota_update(current_ver, auo_mesh_fw_attributes);
+        start_esp32_ota_update(current_ver, auo_mesh_fw_attributes, NULL);
+    }
+  }
+}
+
+xTaskCreate(&wait_ota_update_bit, "wait_ota_update_bit", 10000, NULL, 10, NULL);
+
+```
+**方法2：實作`mqtt_get_fw_info` callback function**
+
+```c
+//實作callback
+void fw_info_received(struct FW_INFO fw_info) {
+    printf("Received firmware information:\n");
+    printf("Firmware Name: %s\n", fw_info.fw_name);
+    printf("Firmware Version: %s\n", fw_info.fw_ver);
+    //呼叫API
+    start_esp32_ota_update(current_ver, auo_mesh_fw_attributes, NULL);
+}
+
+void app_main(void) {
+    //定義結構體實體
+    amota_callbacks_t callbacks = {
+         .mqtt_get_fw_info= fw_info_received,
+    };
+     if (amota32_initialize(NULL) == ESP_OK) {
+        amota32_event_group = xEventGroupCreate(); //創建事件組叫做amota32_event_group
+        xTaskCreate(&amota_cli_uart_task, "amota_cli_uart_task", 8192, (void *)&callbacks, 10, NULL)
     }
 }
-```
 
+```
 <br />
 
 ---
@@ -607,10 +654,12 @@ while (1) {
 
 **Examples:**
 
+**方法1：自行創建任務循環等待 FILE_SYS_AVAILABLE_BIT**
 ```C
 //呼叫start_fw_downloading，將額外的韌體檔案下載至檔案系統中
 
-while (1) {
+void wait_fw_update_bit(void *pvParameter){
+  while (1) {
     //等待來自amotacli_uart_task的事件
     EventBits_t event_bits = xEventGroupWaitBits(amota32_event_group,
                                                     FILE_SYS_AVAILABLE_BIT,
@@ -622,10 +671,36 @@ while (1) {
        //收到這個event bit之後，即可做檔案系統下載
         start_fw_downloading(current_ver, auo_mesh_fw_attributes);
     }
+  }
 }
+
+xTaskCreate(&wait_fw_update_bit, "wait_fw_update_bit", 10000, NULL , 10, NULL);
 
 ```
 
+**方法2：實作`mqtt_get_fw_info` callback function**
+```c
+//實作callback
+void fw_info_received(struct FW_INFO fw_info) {
+    printf("Received firmware information:\n");
+    printf("Firmware Name: %s\n", fw_info.fw_name);
+    printf("Firmware Version: %s\n", fw_info.fw_ver);
+    //呼叫API
+    start_esp32_ota_update(current_ver, auo_mesh_fw_attributes, NULL);
+}
+
+void app_main(void) {
+    //定義結構體實體
+    amota_callbacks_t callbacks = {
+         .mqtt_get_fw_info= fw_info_received,
+    };
+     if (amota32_initialize(NULL) == ESP_OK) {
+        amota32_event_group = xEventGroupCreate(); //創建事件組叫做amota32_event_group
+        xTaskCreate(&amota_cli_uart_task, "amota_cli_uart_task", 8192, (void *)&callbacks, 10, NULL)
+    }
+}
+
+```
 <br />
 
 ---
