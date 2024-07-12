@@ -1,8 +1,6 @@
 #include "amota32.h"
 
 static const char *TAG = "app";
-struct FW_INFO auo_mesh_fw_attributes = {0};
-struct FW_INFO File_info[4];
 
 void wifi_on_connect() {
     printf("Wi-Fi connected successfully!\n");
@@ -25,6 +23,8 @@ void mqtt_get_fw_info(struct FW_INFO fw_info) {
     printf("Firmware Name: %s\n", fw_info.fw_name);
     printf("Firmware Version: %s\n", fw_info.fw_ver);
     printf("Firmware Size: %lu\n", fw_info.fw_size);
+
+    start_esp32_ota_update(CURRENT_FIRMWARE_VERSION, fw_info, NULL);
 }
 
 void exfw_error_callback(int error_code, char *msg) {
