@@ -627,7 +627,7 @@ void app_main(void) {
     };
      if (amota32_initialize(NULL) == ESP_OK) {
         amota32_event_group = xEventGroupCreate(); //創建事件組叫做amota32_event_group
-        xTaskCreate(&amota_cli_uart_task, "amota_cli_uart_task", 8192, (void *)&callbacks, 10, NULL)
+        xTaskCreate(&amota_task, "amota_task", 8192, (void *)&callbacks, 10, NULL)
     }
 }
 
@@ -696,7 +696,7 @@ void app_main(void) {
     };
      if (amota32_initialize(NULL) == ESP_OK) {
         amota32_event_group = xEventGroupCreate(); //創建事件組叫做amota32_event_group
-        xTaskCreate(&amota_cli_uart_task, "amota_cli_uart_task", 8192, (void *)&callbacks, 10, NULL)
+        xTaskCreate(&amota_task, "amota_task", 8192, (void *)&callbacks, 10, NULL)
     }
 }
 
