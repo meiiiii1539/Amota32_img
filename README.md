@@ -1,799 +1,745 @@
 # Amota32
-一個基於ESP-IDF編寫的SDK，提供完整的ESP32本身OTA 更新以及分派的韌體更新檔下載等操作。
+
+
+Amota32 (**A**uo **M**esh **OTA** for ESP**32**) 是一個在 ESP32 上協助使用者利用 AUO MESH OTA 功能的 SDK，採用 C 語言並搭配 Espressif IoT Development Framework ([ESP-IDF](https://github.com/espressif/esp-idf)) 的功能編寫而成。使用者可以用它來：
+
+- 接收韌體更新通知
+- 下載更新檔
+- 完成 ESP32 本身 OTA 更新
+- 暫存分派給其他設備的更新韌體檔
+
+<br />
 
 # Table of contents
-- [1. Overview](https://github.com/meiiiii1539/Amota32/tree/readme?tab=readme-ov-file#1-overview)
-- [2. Feature](https://github.com/meiiiii1539/Amota32/tree/readme?tab=readme-ov-file#2-feature)
-- [3. Prerequisite](https://github.com/meiiiii1539/Amota32/tree/readme?tab=readme-ov-file#3-prerequisite)
-    - [3.1 所需硬體](https://github.com/meiiiii1539/Amota32/tree/readme?tab=readme-ov-file#31-%E6%89%80%E9%9C%80%E7%A1%AC%E9%AB%94)
-    - [3.2 所需軟體](https://github.com/meiiiii1539/Amota32/tree/readme?tab=readme-ov-file#%32-E6%89%80%E9%9C%80%E8%BB%9F%E9%AB%94)
-    - [3.3 Introduction to ESP32 OTA](https://github.com/meiiiii1539/Amota32/tree/readme?tab=readme-ov-file#33-introduction-to-esp32-ota)
-    - [3.4 Introduction to SPIFFS](https://github.com/meiiiii1539/Amota32/tree/readme?tab=readme-ov-file#34-introduction-to-spiffs)
-- [4. Usage](https://github.com/meiiiii1539/Amota32/tree/readme?tab=readme-ov-file#4-usage)
-    - [4.1 專案建置](https://github.com/meiiiii1539/Amota32/tree/readme?tab=readme-ov-file#41-%E5%B0%88%E6%A1%88%E5%BB%BA%E7%BD%AE)
-    - [4.2 Command Line](https://github.com/meiiiii1539/Amota32/tree/readme?tab=readme-ov-file#42-command-line)
-    - [4.3 API Reference](https://github.com/meiiiii1539/Amota32/tree/readme?tab=readme-ov-file#43-api-reference)
-- [5. Appendix](https://github.com/meiiiii1539/Amota32/tree/readme?tab=readme-ov-file#5-appendix)
-    - [5.1 使用VSCODE擴充套件](https://github.com/meiiiii1539/Amota32/tree/readme?tab=readme-ov-file#51-%E4%BD%BF%E7%94%A8vscode%E6%93%B4%E5%85%85%E5%A5%97%E4%BB%B6)
-    - [5.2 手動安裝](https://github.com/meiiiii1539/Amota32/tree/readme?tab=readme-ov-file#52-%E6%89%8B%E5%8B%95%E5%AE%89%E8%A3%9D)
 
-<br>
+- [Amota32](#amota32)
+- [Table of contents](#table-of-contents)
+- [1. Overview](#1-overview)
+- [2. Feature](#2-feature)
+- [3. Prerequisite](#3-prerequisite)
+  - [3.1 所需硬體](#31-所需硬體)
+  - [3.2 所需軟體](#32-所需軟體)
+  - [3.3 ESP32 OTA 介紹](#33-esp32-ota-介紹)
+  - [3.4 SPIFFS 介紹](#34-spiffs-介紹)
+- [4. Usage](#4-usage)
+  - [4.1 Configuration](#41-configuration)
+  - [4.2 專案建置](#42-專案建置)
+  - [4.3 API Reference](#43-api-reference)
+    - [void amota\_task(void \*pvParameters);](#void-amota_taskvoid-pvparameters)
+    - [void amota\_cli\_uart\_task(void \*pvParameters)](#void-amota_cli_uart_taskvoid-pvparameters)
+    - [esp\_err\_t start\_esp32\_ota\_update(const char \*current\_ver, struct FW\_INFO esp\_fw\_info, amota\_callbacks\_t \*callbacks)](#esp_err_t-start_esp32_ota_updateconst-char-current_ver-struct-fw_info-esp_fw_info-amota_callbacks_t-callbacks)
+    - [esp\_err\_t start\_fw\_downloading(const char \*current\_ver, struct FW\_INFO extra\_fw\_info, amota\_callbacks\_t \*callbacks)](#esp_err_t-start_fw_downloadingconst-char-current_ver-struct-fw_info-extra_fw_info-amota_callbacks_t-callbacks)
+    - [esp\_err\_t amota32\_initialize(init\_error\_callback\_t init\_error\_handle)](#esp_err_t-amota32_initializeinit_error_callback_t-init_error_handle)
+  - [4.4 Command Line Interface](#44-command-line-interface)
+- [5. Appendix](#5-appendix)
+  - [5.1 安裝 ESP-IDF：使用 VSCODE 擴充套件](#51-安裝-esp-idf使用-vscode-擴充套件)
+  - [5.2 安裝 ESP-IDF：手動安裝](#52-安裝-esp-idf手動安裝)
+  - [5.3. 配置硬體](#53-配置硬體)
+
+<a name="Overview"></a>
+<br />
 
 # 1. Overview
-Amota32 基於 ESP-IDF 編寫，提供使用者以 HTTP 取得遠端韌體檔案並進行ESP32無線更新的API。此外，使用者也可以使用 Amota32 API 以相同的方式取得其他設備的韌體檔，並將其儲存在 ESP32 內部的嵌入式檔案系統中。使用者能夠使用Amota32提供的命令列介面，對ESP32 下達指令，例如讀取或刪除檔案、授權 OTA 更新等。
 
-![overview](https://github.com/meiiiii1539/Amota32/blob/readme/image/Amota32%20(1).jpg)
+Amota32 library 提供一系列 API，可以讓使用者在授權更新之後完成 ESP32 的 OTA，以及控制器的分派檔案下載。Amota32 亦提供多種更新授權方式，例如：手動授權或自動授權。使用者可以通過命令列介面(CLI)設定授權方法，確保更新過程的安全性和靈活性。
 
-<br>
+Amota32 OTA 和檔案下載的觸發機制基於 AUO MESH 上是否有被上傳新韌體。當 AUO MESH 上的韌體被更新時，平台會使用 MQTT 傳達新韌體的檔案資訊，而 ESP32 在接收到韌體資訊之後，再根據這些資訊組合成 REST API 請求，並在用戶授權更新後執行OTA或是下載檔案，如下圖左半部所示。此外，使用者也能夠使用 Amota32 CLI，透過命令列對 ESP32 下達其他指令，例如讀取、刪除檔案等，如下圖右半部所示。
+
+<img src="https://github.com/meiiiii1539/Amota32_img/raw/main/image/Amota32%20(1).jpg" alt="overview" style="max-width: 100%; height: auto;" alien="center" />
+
+上述流程皆封裝在 Amota32 提供的 API 中，使用者只須啟動相關任務，並且在獲取韌體許可通知時呼叫執行 OTA 或檔案下載的 API，即可獲得所需功能。
+
+<br />
+<br />
+
+<a name="Feature"></a>
 
 # 2. Feature
-- **ESP32本身OTA**<br>
-- **ESP32本身OTA回滾機制**<br>
-- **ESP32本身OTA自動授權更新機制**<br>
-- **韌體更新檔暫存**<br>
-- **韌體檔案寫入、讀取、刪除**<br>
-- **命令列執行相關功能**
 
-<br>
+- ESP32 本身 OTA
+- ESP32 本身 OTA 回滾機制
+- ESP32 本身 OTA 自動授權更新機制
+- 額外的韌體更新檔暫存
+- 額外的韌體檔案寫入、讀取、刪除
+- 提供串列埠遠端控制指令，使用者可在上位機通過命令列執行相關功能
+
+<a name="Prerequisite"></a>
+<br />
 
 # 3. Prerequisite
+
+<a name="Hardware"></a>
+
 ## 3.1 所需硬體
-- ESP32板。
-- USB 連接線USB A / micro USB B。
-- 運行 Windows、Linux 或 macOS 的電腦。
-- Uart2USB Bridge
+
+- ESP32 開發板
+- USB Type-A 對 USB Micro-B 傳輸線
+- 開發環境主機 (Windows、Linux 或 macOS)
+- USB-to-UART Bridge
 - 杜邦線
+
+<a name="Toolchain"></a>
+<br />
 
 ## 3.2 所需軟體
 
-- 用於編譯 ESP32 程式碼的工具鏈 [詳見附錄安裝步驟3](https://github.com/meiiiii1539/Amota32/tree/readme?tab=readme-ov-file#1-%E5%AE%89%E8%A3%9Desp-idf)
-- 建置工具- CMake 和 Ninja
-- ESP-IDF（Espressif IoT Development Framework）
-- Amota32 project
+- 用於編譯 ESP32 程式碼的工具鏈 [詳見附錄安裝步驟 3](#VSCODE_extension)
+- 建置工具 - CMake 和 Ninja
+- ESP-IDF
+- Amota32 library (本專案)
+
+<a name="ESP32_OTA"></a>
+<br />
+
+## 3.3 ESP32 OTA 介紹
+
+<a name="AB_Partition_Scheme"></a>
+
+### (1) A/B Partition Scheme
+
+微控器韌體常見的更新策略是採取 A/B 分區切換方法 (A/B Partition Scheme) 來完成，ESP32 的 OTA 更新亦是採用相同策略，因此快閃記憶體必須準備至少兩個應用系統分區，如下圖中的`ota_0`及`ota_1`。
+
+當第一次執行 OTA 時，新的韌體將被寫入分區 `ota_0` 並自動更新狀態維護分區 `otadata` 中的下次開機啟動指標位置。當進行第二次 OTA 時，新韌體會被寫入分區 `ota_1`；同理，第三次則會寫進分區 `ota_0`。接續的更新皆按上述規則，如此循環。
+
+<img src="https://github.com/meiiiii1539/Amota32_img/raw/main/image/ota_flash_mem.jpg" alt="flash mem" style="width: 100%; height: auto;" />
+<br />
+
+<a name="Non_OTA_update"></a>
+<br />
+
+### (2) 非 OTA 更新(有線更新)
+
+當我們從電腦燒錄程式至 ESP32 時，預設皆是燒錄到起始位址 `0x10000` 所指向的分區(如上圖 `factory` 分區)。
+
+<a name="Partition_CSV"></a>
+<br />
+
+### (3) 磁碟分區設定
+
+ESP32 的應用程式專案使用 `partition.csv` 文件來儲存分區定義的資訊。表 1 顯示了預設配置(_Single factory app, no OTA_)的資訊，只有一個 factory 分區且沒有 OTA 分區，因此這樣的配置是無法支援 OTA 的。
+
+<br />
+
+**表 1、預設 partition table- Single factory app, no OTA**
+
+| Name     | Type | SubType | Offset  | Size   | Flags |
+| -------- | ---- | ------- | ------- | ------ | ----- |
+| nvs      | data | nvs     | 0x9000  | 0x6000 |
+| phy_init | data | phy     | 0xf000  | 0x1000 |
+| factory  | app  | factory | 0x10000 | 1M     |
+
+<br />
+
+要讓 ESP32 支援 OTA 更新，我們需要將分區修改如表 2 的 _Factory app, two OTA definitions_ 配置，或是自行導入 Partition table。
+
+<br />
+
+**表 2、Factory app, two OTA definitions**
+
+| Name     | Type | SubType | Offset   | Size   | Flags |
+| -------- | ---- | ------- | -------- | ------ | ----- |
+| nvs      | data | nvs     | 0x9000   | 0x6000 |
+| phy_init | data | phy     | 0xf000   | 0x1000 |
+| factory  | app  | factory | 0x10000  | 1M     |
+| ota_0    | app  | ota_0   | 0x10000  | 1M     |
+| ota_1    | app  | ota_1   | 0x210000 | 1M     |
+
+<br />
+
+<a name="SPIFFS"></a>
+<br />
+
+## 3.4 SPIFFS 介紹
+
+Amota32 的另一功能是可以將額外的韌體更新檔下載至檔案系統內儲存，以作為其他控制器的韌體檔分派來源。本小節對 Amota32 使用的檔案系統 SPIFFS (SPI Flash File System) 作一簡單介紹。
+
+SPIFFS 是一種適用於小型嵌入式系統的檔案系統，具有節省儲存空間和方便管理的特點。要在 ESP32 上使用 SPIFFS 檔案系統，需要在 `partition.csv` 文件中配置一個 SPIFFS 分區，如表 3 所列。
+
+<br />
+
+**表 3、Amota32 的 partition table**
+| Name | Type | SubType | Offset | Size | Flags |
+| -------- | ---- | ------- | -------- | -------- | ----- |
+| nvs | data | nvs | 0x9000 | 0x4000 | |
+| otadata | data | ota | 0xd000 | 0x2000 | |
+| phy_init | data | phy | 0xf000 | 0x1000 | |
+| ota_0 | app | ota | 0x10000 | 0x150000 | |
+| ota_1 | app | ota | 0x160000 | 1M | |
+| storage | data | spiffs | | 0x180000 | |
+
+<br />
+
+在應用程式的初始化階段，必須將 SPIFFS 檔案系統掛載起來。如果是第一次掛載，系統會嘗試將 SPIFFS 格式化，因此可能需要等待較長的時間。一旦初始化完成，爾後便可以通過標準的 C 語言檔案操作函數在 SPIFFS 中讀寫檔案。
+
+目前 SPIFFS 系統不支援目錄。舉例來說，如果 SPIFFS 掛載在 `/spiffs` 下，裡面的檔案路徑就應該為 `/spiffs/temp.txt`；如果路徑是 `/spiffs/text/temp.txt`，則表示檔案名稱為 `text/temp.txt`。
+
+<br />
+<a name="Usage"></a>
+<br />
+
+# 4. Usage
+
+Amota32 係基於 ESP-IDF 編寫而成，關於開發環境的完整安裝流程請見[附錄](#Appendix)。
+
+<a name="Configuration"></a>
 
 
-## 3.3 Introduction to ESP32 OTA
+## 4.1 Configuration
 
-Amota32提供ESP32的OTA更新，透過HTTP資料流的方式從AUO Mesh獲取韌體，並且做ESP32自身更新，通常OTA執行過後，會需要設備重新開機使新程式生效，Amota32設計會自動執行重新開機。
+### (1) SDK Configuration
 
-此外，OTA的韌體授權有許多方式，例如需要通過用戶授權的機制，或是自動執行更新等，Amota32提供用戶授權的機制，以及使用命令列設定授權的方法。
+<br />
 
-ESP32中有內建快閃記憶體，這塊記憶體內的資訊不會因為斷電而消失，所以一些需要持久化的資料會存在這裡。ESP32 的 OTA 更新主要是在快閃記憶體SubType為OTA的分區中進行。進行 OTA 更新時，至少需要有兩個以上的 OTA 分區，假設我們只有兩個 OTA 分區，第一次執行 OTA 時，新的韌體檔案會被寫入名為 "ota_0" 的 APP 分區，並且在 "otadata" 中更新 ESP32 執行的指標位置；第二次 OTA 時，新韌體檔會被寫入名為 "ota_1" 的 APP 分區；第三次則會再次寫入 "ota_0" 中，如此循環往復，如下圖。此外，當我們從電腦燒錄程式至ESP32時，會預設燒錄在位置為0x10000的分區，不管我們在此位置設置甚麼類型分區，ESP32都會將APP燒錄在此位置。
+**STEP 1: 設定目標裝置**
 
-![flash mem](https://github.com/meiiiii1539/Amota32/blob/readme/image/ota_flash_mem.jpg)
+- 點選 View >Command Palette >ESP-IDF：Set Espressif Device Target
 
-在 ESP32 的項目中，partition.csv 文件定義了不同存儲區的分區信息。表格一為預設的配置"Single factory app, no OTA"，只有一個factory partition而且沒有OTA分區，此配置是無法做OTA的；我們需要將配置更改為"Factory app, two OTA definitions"選項(表格二)，或是自行導入Partition table。
-#### 表格一：預設partition table- Single factory app, no OTA
+<img src="https://github.com/meiiiii1539/Amota32_img/raw/main/image/set_target_6.png" alt="six" style="width: 600px; height: auto;" />
 
-| Name | Type |SubType| Offset | Size| Flags|
-|-----|-----|-----|-----|-----|-----|
-| nvs| data| nvs| 0x9000|0x6000|
-| phy_init| data|phy| 0xf000|0x1000|
-| factory| app|factory| 0x10000|1M|
-#### 表格二：Factory app, two OTA definitions
-| Name | Type |SubType| Offset | Size| Flags|
-|-----|-----|-----|-----|-----|-----|
-| nvs| data| nvs| 0x9000|0x6000|
-| phy_init| data|phy| 0xf000|0x1000|
-| factory| app|factory| 0x10000|1M|
-| ota_0| app|ota_0| 0x10000|1M|
-| ota_1| app|ota_1| 0x210000|1M|
+<br />
+<a name="SDK_config"></a>
 
-#### 示例：列印Auo Mesh回傳之韌體屬性資訊
+<br />
 
-Amota OTA 的觸發機制在於，當 AUO Mesh 上的韌體屬性有更新時，AUO Mesh 會使用 MQTT 通訊協定將新韌體資訊發布給 ESP32。ESP32 接收到資訊後，會根據這些資訊組合成REST API，並以HTTP下載韌體更新檔案。由於需要通過 HTTP 獲取檔案，因此在進行 OTA 前，我們需要先連接到 WiFi。此外，我們也需要連接到 AUO Mesh 的 MQTTs Broker，並訂閱相關的 topic，以便在有新韌體檔案時能夠接收到更新資訊。下方範例程式展示ESP32連接WIFI後訂閱MQTT topic，並等待MQTTs broker回傳屬性資訊。
+**STEP 2: SDK 配置**
 
+- 點選 View >Command Palette >ESP-IDF：SDK Configuration editor
+- 在此可以設定 WiFi ssid, WiFi password, MQTTs broker url、broker port number 等等
 
-```c
-#請先去configuration 配置mqtt broker url、port、wifi...的資訊
-#include "amota32.h"
+<img src="https://github.com/meiiiii1539/Amota32_img/raw/main/image/sdk_conf_7-1.png" alt="Image" style="width: 600px; height: auto;" />
+<br/>
+<img src="https://github.com/meiiiii1539/Amota32_img/raw/main/image/auo_mesh_ota_conf_7-2.png" alt="Image" style="width: 600px; height: auto;" />
 
-struct shared_keys shared_attributes;
-struct file_info File_info[4];
-void app_main(void) {
-    
-    nvs_initialize();
-    amota32_event_group = xEventGroupCreate();
+<br />
+<br />
 
-    char running_partition_label[sizeof(((esp_partition_t *)0)->label)]; 
-    get_running_partition_label(running_partition_label, sizeof(running_partition_label));
-    initialize_wifi(running_partition_label);
-    while (1) {
-        EventBits_t bits = xEventGroupWaitBits(amota32_event_group,
-                                               WIFI_CONNECTED_EVENT | WIFI_DISCONNECTED_EVENT,
-                                               pdTRUE,  // 清除等待的事件標誌
-                                               pdFALSE, // 不需要等待所有事件
-                                               portMAX_DELAY);
-        if (bits & WIFI_CONNECTED_EVENT) {
-            initialize_mqtt(running_partition_label);
-            bits = xEventGroupWaitBits(amota32_event_group,
-                                       MQTT_CONNECTED_EVENT | MQTT_DISCONNECTED_EVENT,
-                                       pdTRUE,  // 清除等待的事件標誌
-                                       pdFALSE, // 不需要等待所有事件
-                                       portMAX_DELAY);
-            if (bits & MQTT_CONNECTED_EVENT) {
-                ESP_LOGI("app_main", "MQTT connected");
-                connect_and_publish_firmware_info();
-                bits = xEventGroupWaitBits(amota32_event_group,
-                                           OTA_CONFIG_FETCHED_EVENT,
-                                           pdTRUE,  // 清除等待的事件標誌
-                                           pdFALSE, // 不需要等待所有事件
-                                           portMAX_DELAY);
+**STEP3. 編譯器配置**
 
-                if (bits & OTA_CONFIG_FETCHED_EVENT) {
-                    ESP_LOGI("app_main", "OTA config fetched");
-                    ESP_LOGI("app_main", "Firmware info: server_title=%s, version=%s", shared_attributes.target_fw_server_title, shared_attributes.target_fw_ver);
-                    break; 
-                }
-            }
-        }
-        vTaskDelay(pdMS_TO_TICKS(1000)); // 避免忙碌等待
-    }
-}
+- 在 `.vscode/c_cpp_properties.json` 文件進行配置
+- 詳情請參考[ESP-IDF 官方文件](https://github.com/espressif/vscode-esp-idf-extension/raw/master/docs/C_CPP_CONFIGURATION.md)說明
 
-```
-運行成功後，可以在終端機上看到AUO Mesh目前的韌體資訊(檔案名稱以及版本)，獲得這兩個資訊之後可以將其作為RESR API的參數，如下所示。
+<br />
 
-![REST API](https://github.com/meiiiii1539/Amota32/blob/readme/image/RESP%20API.jpg)
-
-獲得完整REST API後，即可呼叫`start_ota`函數，開始執行OTA動作。`start_ota`會先確認AUO Mesh上的韌體是否適用於ESP32(可能是控制盒或LED的韌體)以及是否為新韌體版本。如果都符合條件，將會初始化HTTP Client，並進行ESP32 OTA。
-
-在OTA成功後，將會透過UART發送成功訊息給使用者，也會將新韌體的元資訊儲存進NVS區。因此在OTA開始前，必須調用`initialize_uart`以及`initialize_nvs`進行初始化。最後，ESP32將會重新啟動。
-
-## 3.4 Introduction to SPIFFS
-Amota32的另一功能是分派的韌體更新檔下載至檔案系統。ESP32有多種檔案系統選項，例如SPIFFS、FATFS、LittleFS...等，各有不同的特色，Amota32選用的是SPIFFS檔案系統。SPIFFS 檔案系統（SPI Flash File System）是一種適用於較小的嵌入式系統的檔案系統，具有節省存儲空間和方便管理的特點，而且在沒有雲端可以儲存，又沒有SD記憶卡的情況，這時SPIFFS便可以發揮很大的作用，，但是要注意的是，不要存了太多檔案而讓SPIFFS爆掉。
-
-如果在 ESP32 上使用 SPIFFS 檔案系統，通常需要在 partition.csv 文件中配置一個 SPIFFS 分區。表格三是Amota32的 partition.csv 配置，包含 SPIFFS 分區。
-#### 表格三：Amota32 的partition table
-| Name | Type |SubType| Offset | Size| Flags|
-|-----|-----|-----|-----|-----|-----|
-| nvs| data| nvs| 0x9000|0x4000||
-| otadata| data|ota| 0xd000|0x2000||
-| phy_init| data|phy| 0xf000|0x1000||
-| ota_0| app|ota| 0x10000|0x150000||
-| ota_1| app|ota| 0x160000|1M||
-|storage|data|spiffs||0x180000||
-
-在應用程序中，需要初始化以掛載SPIFFS檔案系統，如果是第一次掛載，系統會嘗試將SPIFFS格式化，會花比較久的時間。初始化後，可以使用標準的 C 文件操作函數在 SPIFFS 中讀寫文件。
-
-目前SPIFFS系統不支援目錄，舉例來說，如果SPIFFS掛載在/spiffs下，裡面的檔案路徑就應該為/spiffs/temp.txt，如果路徑是/spiffs/text/temp.txt，就代表文件名稱為text/temp.txt。
-
-下方範例程式，演練如何將AUO Mesh上的韌體以http datastreaming傳輸進ESP32，並且寫入檔案系統中。
+<a name="ESP32_and_PC_Connection"></a>
+<br />
 
 
-#### 示例：以https傳輸韌體進ESP32，並且寫入檔案系統中
-```c
-#include "amota32.h"
+### (2) PC 與 ESP32 建立連接
+<br />
+用 Micro USB 線將 ESP32 開發版連接到電腦(如下圖所示)，正常情況下 USB Driver 將會自動安裝；若無自動安裝請自行確認 ESP 開發版型號所對應的 USB Driver，並上網自行安裝。 
 
-/*
-請先在AUO Mesh為某設備指派一個韌體，
-假設上傳的韌體名稱為：example，版本為1.0。
-*/
-void app_main(void) {
-    
-    /*初始化*/
-    init_nvs();
-    init_spiffs(5);
-    esp_http_client_handle_t amota32_client;
-    amota32_event_group = xEventGroupCreate();
-    
-    /*組合韌體的http url*/
-    char url[512];
-    sprintf(url, "http://demo.thingsboard.io/api/v1/%s/firmware?title=%s&version=%s",CONFIG_MQTT_ACCESS_TOKEN,"example","1.3");
+<br />
+<img src="https://github.com/meiiiii1539/Amota32_img/raw/main/image/esp32_connect.png" alt="esp32 connect" style="width: 600px; height: auto;" />
 
-    /*初始化wifi*/
-    char running_partition_label[sizeof(((esp_partition_t *)0)->label)]; 
-    get_running_partition_label(running_partition_label, sizeof(running_partition_label));
-    initialize_wifi(running_partition_label);
+<br />
+<br />
+連接到電腦後，檢查Windows裝置管理員中的COM列表，可以嘗試斷開再重新接上ESP32，便可以在設備管理器上確認ESP32使用的是哪一個COM，如下圖所示。<br />
 
-    /*
-    等待wifi連線，若連線則開始讀取data streaming，並且寫入檔案系統中
-    寫入的檔案位置在於/spiffs/example1.3.txt
-    */
-    while (1) {
-        EventBits_t bits = xEventGroupWaitBits(amota32_event_group,
-                                               WIFI_CONNECTED_EVENT | WIFI_DISCONNECTED_EVENT,
-                                               pdTRUE,  // 清除等待的事件標誌
-                                               pdFALSE, // 不需要等待所有事件
-                                               portMAX_DELAY);
-        if (bits & WIFI_CONNECTED_EVENT) {
-            char *buffer = malloc(MAX_HTTP_RECV_BUFFER + 1);
-            esp_err_t err = init_and_open_http_connection(&amota32_client, url);
-            if (err != ESP_OK){
-                free(buffer);
-                return;
-            }
+<img src="https://github.com/meiiiii1539/Amota32_img/raw/main/image/device_manager.png" alt="com" style="width: 600px; height: auto;" />
 
-            int content_length =  esp_http_client_fetch_headers(amota32_client);
-            ESP_LOGE(TAG, "content length: %d", content_length);
-            int total_read_len = 0, read_len;
+<br />
+<br />
+確認ESP32使用的串列端口之後，可以使用PuTTy SSH Client工具驗證串口連接是否成功，需要在PuTTy SSH Client中輸入下方通訊參數：
 
-            if (total_read_len < content_length) {
-                read_len = read_datastreaming_into_file(amota32_client, buffer, MAX_HTTP_RECV_BUFFER,content_length,"example","1.3");
-                if (read_len <= 0) {
-                    ESP_LOGE(TAG, "Error read data: %d", read_len);
-                    fclose(fp);
-                    return ;
-                }
-                ESP_LOGD(TAG, "read_len = %d", read_len);
-            }
-            esp_http_client_close(amota32_client);
-            esp_http_client_cleanup(amota32_client);
-            free(buffer);
-            return;
-        }
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-}
+    波特率 = 115200，數據位 = 8，停止位 = 1，奇偶校驗 = N
+<br />
+接著在終端機中開啟串口，觀察是否有顯示任何資訊，如果顯示的是人類可讀訊息(而非亂碼)則表示連接成功。
 
-```
+<a name="UART_Configuration"></a>
+<br />
 
-<br>
+### (3) UART Configuration
 
-# 4. Usage 
-## 4.1 專案建置
-### 專案結構
+在 ESP32 與 PC 連線成功後，您將能夠在串口監視器上看到 Amota32 的 LOG 輸出。如果需要與 ESP32 進行互動，則可以使用 Amota32 提供的命令列介面 (CLI)。Amota32 CLI 允許主機（Host machine）通過遠端命令執行 OTA 相關操作以及遠端調試。
+<br />
+
+#### 連接USB-to-UART Bridge
+在使用 Amota32 CLI 之前，需要連接設備並啟用對應的 UART 串列埠。以下是設備連接的設置步驟：
+
+  1. USB-to-UART Bridge 透過 USB 介面連接到電腦 (用於串列資料傳輸)。
+  2. ESP32 和 USB-to-UART Bridge 之間透過杜邦線進行連接。
+<br />
+
+<img src="https://github.com/meiiiii1539/Amota32_img/raw/main/image/UART-to-USB.png" alt="uart-to-usb" style="width: 600px; height: auto;" />
+<br />
+
+詳細的腳位連接請參考[附錄](#Hardware_detail)
+<br />
+
+#### 初始化UART
+在設置完硬體連接後，我們需要在 ESP32 上使用 `initialize_uart()` 初始化 UART。初始化 UART 是為了確保 ESP32 能夠正確的發送和接收串列資料，從而與 USB-to-UART Bridge 進行通訊。在初始化 UART 時，需要傳入以下參數：
+
+- `baud_rate`: `115200`
+  <!-- - 即每秒傳輸的bit數。115200 是常用的波特率。 -->
+- `data_bits` : `UART_DATA_8_BITS`
+  <!-- - 即每個字節的位元數。8 位元是標準配置，能夠滿足大多數通訊需求。 -->
+- `parity` : `UART_PARITY_DISABLE`
+  <!-- - 奇偶校驗，用於錯誤檢測。我們設置為不使用奇偶校驗。 -->
+- `stop_bits` : `UART_STOP_BITS_1`
+  <!-- - 停止位，表示一個數據包的結尾。 -->
+- `flow_ctrl` : `UART_HW_FLOWCTRL_DISABLE`
+  <!-- - 流量控制，用於管理資料流的速度。這裡設置為不使用硬體流量控制。 -->
+- `source_clk` : `UART_SCLK_DEFAULT`
+  <!-- - 時鐘源，用於提供 UART 所需的時鐘信號。設置為默認時鐘源。 -->
+
+連接設置完成後，使用者便可以透過 Amota32 CLI 輸入命令，並透過 USB-to-UART Bridge 將命令發送到 ESP32。ESP32 在接收命令後執行相應的操作。
+
+
+<a name="Build_Project"></a>
+<br />
+
+## 4.2 專案建置
+
+#### 專案結構
 
 ```
 amota32/
 ├── CMakeLists.txt
+├── partition.csv
 ├── src/
 │ ├── CMakeLists.txt
+│ ├── config.json
 │ ├── amota32.c
-│ ├── auto_auth.c
-│ ├── file_info.c
-│ ├── file.c
-│ ├── handler.c
 │ ├── wifi.c
+│ ├── mqtt.c
+│ ├── ota.c
+│ ├── file.c
+│ ├── uart.c
+│ ├── initialize.c
+│ ├── nvs_authflag.c
+│ ├── nvs_fileinfo.c
+│ ├── global_variable.c
 │ ├── include/
 │ │ ├── amota32.h
-│ │ ├── auto_auth.h
-│ │ ├── file_info.h
+│ │ ├── mqtt.h
+│ │ ├── ota.h
 │ │ ├── file.h
-│ │ ├── handler.h
-│ │ ├── wifi.h
-│ │ ├── define.h
+│ │ ├── uart.h
+│ │ ├── initialize.h
+│ │ ├── nvs_authflag.h
+│ │ ├── nvs_fileinfo.h
+│ │ ├── global_variable.h
 ├── examples/
 │ ├── CMakeList.txt
 │ ├── main.c
 
 ```
-我們已經將所有提供給研發人員的 API 都放置在 `src` 資料夾中，並在 `CMakeLists.txt` 中完成了相應的連結配置。使用者只需在 `main.c` 中引入`amota32.h`頭文件即可。
 
-**STEP1. 編寫主程式：**
-將主程式放置於`main.c`，範例程式可參考[這裡](https://github.com/meiiiii1539/Amota32/tree/readme?tab=readme-ov-file#%E7%A4%BA%E4%BE%8B%E5%88%97%E5%8D%B0auo-mesh%E5%9B%9E%E5%82%B3%E4%B9%8B%E9%9F%8C%E9%AB%94%E5%B1%AC%E6%80%A7%E8%B3%87%E8%A8%8A)
+`src` 目錄下的原始碼係 Amota32 的功能實作，而 `CMakeLists.txt` 指示了相應的編譯期連結配置。使用者只需將 Amota32 放置到應用專案的適當位置，並在應用入口 `main.c` 中引入 `amota32.h` 頭文件即可以使用 Amota32 提供的各項功能。以下說明大致的使用步驟：
 
-**STEP2. build項目：**
-於terminal運行以下命令來編譯項目
-```
+<br />
+
+**STEP 1: 編寫主程式**
+
+編寫主程式 `main.c`。
+
+<br />
+
+**STEP 2: Build 專案**
+
+於 terminal 執行以下命令進行編譯
+
+```sh
 idf.py build
 ```
-或是在VSCode介面上點選 **View >Command Palette >ESP-IDF：Build your Project**
 
-**STEP3. flash項目：**
-於terminal運行以下命令將項目燒錄到ESP32上
-```
+或是在 VSCode 介面上點選 _View >Command Palette >ESP-IDF：Build your Project_ 亦可。
+
+<br />
+
+**STEP 3: 燒錄韌體**
+
+於 terminal 執行以下命令將專案建置完後的二進位映像檔燒錄到 ESP32
+
+```sh
 idf.py flash
 ```
-或是在VSCode介面上點選 **View >Command Palette >ESP-IDF：Flash(Uart) your Project**
 
-**STEP4. monitor項目：**
-於terminal運行以下命令將項目燒錄到ESP32上
+或是在 VSCode 介面上點選 **View >Command Palette >ESP-IDF：Flash(Uart) your Project** 亦可。
+
+<br />
+
+**STEP 4: 監看應用程式 log**
+
+在燒錄完畢後，可於 terminal 執行以下命令，監看應用程式的 log 輸出：
+
 ```
 idf.py monitor
 ```
-或是在VSCode介面上點選 **View >Command Palette >ESP-IDF：Monitor your Device**
 
+或是在 VSCode 介面上點選 **View >Command Palette >ESP-IDF：Monitor your Device**
 
-## 4.2 Command Line
-
-在使用Command Line之前，我們需要先進行設置，詳細的設置方法請參考[附錄](#https://github.com/meiiiii1539/Amota32/tree/readme?tab=readme-ov-file#3-%E9%85%8D%E7%BD%AE%E7%A1%AC%E9%AB%94)
-
-在配置UART時，需要使用以下參數
-
-
-- baud_rate : 115200
-- data_bits : UART_DATA_8_BITS
-- parity : UART_PARITY_DISABLE
-- stop_bits : UART_STOP_BITS_1
-- flow_ctrl : UART_HW_FLOWCTRL_DISABLE
-- source_clk : UART_SCLK_DEFAULT,
-
-| CLI | 說明 |
-|-----|-----|
-| `amota ota-update [-y]`| 執行OTA 更新。(若無輸入沒有-y，系統便會詢問是否授權)|
-| `amota ota-check`| 檢查可用的OTA更新。|
-| `amota esp-version` | 顯示ESP32版本。|
-| `amota esp-rollback`| 回滾到另一個分區。此ESP32的OTA（Over-the-Air 更新）在兩個OTA分區（ota_0 和 ota_1）之間切換。<br>當前分區發生故障或需要回滾時，可以從當前分區切換到另一個分區，以確保系統恢復到之前的穩定狀態。|
-| `amota autoauth [-y\|-N]`| 設定自動授權。一般預設為`false`，即不自動為OTA做授權，使用者在每次OTA操作時都需要做驗證|
-| `amota list-files`| 列出檔案列表。|
-| `amota read-file --index=<index>`|讀取特定文件內容，並以UART傳輸至serial port。您可以使用ota list-files指令查看所需讀取的index值|
-| `amota delete-file --index=<index>`|刪除特定文件內容。您可以使用ota list-files指令查看所需讀取的index值|
-| `amota --help` |提供命令行使用幫助|
-
-
+<br />
+<a name="APIs"></a>
+<br />
 
 ## 4.3 API Reference
 
-### `rollback_ota_partition(char* partition1, char* partition2)`
-
-#### Description：
-
-此函式用於回滾 OTA 分區，從而恢復到先前的韌體版本。
-
-#### Parameters：
-
-| Name | Type |Description |
-|-----|-----|-----|
-|`partition1`|char* |第一個 OTA 分區的標籤。|
-|`partition2`|char* |第二個 OTA 分區的標籤。|
-
-#### Return value：
-
-| Value |Type |Description |
-|-----|-----|-----|
-|`ESP_OK`|esp_err_t|ok|
+#### (1) 使用流程
+#### 流程圖：
+<img src="https://github.com/meiiiii1539/Amota32_img/raw/main/image/swim_lane.jpg" alt="swim_lane" style="width: 100%; height: auto;" />
 
 
-#### Note：
-回滾後請自行restart ESP32
-___
+Amota32 提供一支 FreeRTOS 任務 [amota_task()](#amota_task) 來執行 OTA 管理，當此任務接收到 AUO MESH 傳來的韌體變更資訊後便會發佈通知，應用程式在收到通知後可以呼叫 [start_esp32_ota_update](#start_esp32_ota_update) 來執行 ESP32 本身的 OTA 更新。此外，該任務也負責下載額外的韌體更新檔，當應用程式接收到下載許可的通知後，可以呼叫 [start_fw_downloading()](#start_fw_downloading()) 將額外的韌體檔案下載至 ESP32 的檔案系統中。
 
-### `initialize_wifi(const char *running_partition_label)`
+為了方便上位機(例如另一控制器)通過命令行介面(CLI)來使用 OTA 的相關功能，Amota32 提供了另一個任務 [amota32_cli_uart_task()](#amota32_cli_uart_task) 負責建立 CLI 功能。如此，上位機便可以透過 UART 來進行讀取或刪除檔案、授權 OTA 更新等操作。
 
-#### Description：
+<br />
 
-此函式用於初始化 Wi-Fi，配置 Wi-Fi 客戶端的連接、保存和恢復 Wi-Fi 憑證，並啟動 Wi-Fi 客戶端。
+#### (2) 自動授權旗幟
 
+Amota32 定義了一個名為`auth_flag`的旗標來判斷是否自動授權更新。一般來說，`auth_flag`的預設為 `false`，表示用戶需要透過CLI來授權更新，這時使用者可以利用CLI更改設定為自動授權更新，爾後便不須在每次更新時做授權。
 
-#### Parameters：
+<br />
 
-| Name | Type |Description |
-|-----|-----|-----|
-|`running_partition_label`|const char *|運行中的分區標籤或名稱。|
+#### (3) 結構體定義
 
-#### Return value：
+#### 韌體資訊結構體
 
-| Value |Type |Description |
-|-----|-----|-----|
-|`ESP_OK`|esp_err_t|ok|
-
-___
-
-
-### `initialize_mqtt(const char *running_partition_label)`
-
-#### Description：
-
-此函式用於初始化 MQTT 客戶端，配置 MQTT 代理的url、port和access token，並啟動 MQTT 客戶端。
-
-#### Parameters：
-
-| Name | Type |Description |
-|-----|-----|-----|
-|`running_partition_label`|const char * |運行中的分區標籤或名稱。|
-
-#### Return value：
-
-| Value |Type |Description |
-|-----|-----|-----|
-|`ESP_OK`|esp_err_t|ok|
-
-
-___
-
-
-### connection_state(BaseType_t actual_event)
-
-#### Description：
-
-此函式用於檢查連接狀態，並根據不同的事件採取相應的操作。
-
-
-#### Parameters：
-
-| Name | Type |Description |
-|-----|-----|-----|
-|`actual_event`|BaseType_t |一個表示當前事件的位元組，用於確定 Wi-Fi 和 MQTT 連接狀態。|
-
-
-
-#### Return value：
-
-| Value |Type |Description |
-|-----|-----|-----|
-|`STATE_WAIT_WIFI`|enum state|當 Wi-Fi 未連接時|
-|`STATE_WAIT_MQTT`|enum state|當 MQTT 未連接時|
-|`STATE_CONNECTION_IS_OK`|enum state|當 Wi-Fi 和 MQTT 都已連接時。|
-
-
-___
-
-### fw_params_are_specified(struct shared_keys ota_config)
-
-#### Description：
-
-此函式用於檢查 OTA（空中升級）配置是否已經被指定。它檢查了所提供的 OTA 配置結構體，確保其中的重要參數已經被正確設置。
-
-#### Parameters：
-
-| Name | Type |Description |
-|-----|-----|-----|
-|`ota_config`|struct |OTA 配置結構體，其中包含了待更新的韌體相關訊息。|
-
-#### Return value：
-
-
-| Value |Type |Description |
-|-----|-----|-----|
-|True|bool|表示所有必要的參數都已經被指定。|
-|False|bool|其中任何一個參數（如韌體標題或版本）尚未被指定|
-
-___
-### start_ota(const char *current_ver, struct shared_keys ota_config);
-
-#### Description：
-
-此函式用於初始化 OTA 流程，並進行韌體的OTA。
-
-#### Parameters：
-
-
-| Name | Type |Description |
-|-----|-----|-----|
-|`current_ver`| const char *|指向當前韌體版本的字串指標。|
-|`ota_config`|struct |OTA 配置結構體，其中包含了待更新的韌體相關訊息。|
-
-
-#### Return value：
-
-| Value |Type |Description |
-|-----|-----|-----|
-|`ESP_OK`|esp_err_t|ok|
-
-#### Sample Code：：
+Amota32定義了一個結構體類型`FW_INFO`，此類型會有兩個實體，一個為`auo_mesh_fw_attributes`用來儲存 AUO MESH 傳來的新韌體資訊；另一個為`file_info`，它被宣告成一個結構體陣列，用來儲存檔案系統內的檔案資訊。
 
 ```c
-#include "amota32.h"
-struct shared_keys shared_attributes;
-struct file_info File_info[4];
+struct FW_INFO
+{
+    char fw_name[256]; //韌體名稱
+    char fw_ver[128]; //韌體版本
+    uint32_t fw_size; //韌體大小
+}
+
+struct FW_INFO auo_mesh_fw_attributes;
+struct FW_INFO File_info[4];
+
+```
+
+#### 初始化結構體
+
+Amota32亦定義了另一個結構體類型`config_t`用來儲存初始化UART、NVS、Spiffs等的所有參數。使用者可以至`config.json`中更改所需的配置，程式會在`amota_initialize()`中將JSON檔內的資訊賦值到結構體實體中。
+```c
+typedef struct {
+    char base_path[32];
+    char partition_label[32];
+    size_t max_files;
+    bool format_if_mount_failed;
+    int baud_rate;
+    int data_bits;
+    int parity;
+    int stop_bits;
+    int flow_ctrl;
+    int rx_flow_ctrl_thresh;
+    char main_cmd[5];
+    size_t max_cmdline_length;  
+    size_t max_cmdline_args;    
+    uint32_t heap_alloc_caps;   
+    int hint_color;             
+    int hint_bold;
+} config_t;
+
+```
+
+<br />
+
+<a name="callback"></a>
+
+### (4) Callback Functions
+
+下方表格所列為Amota32 SDK 所提供的 callback functions 介面。
+
+**表 4、Callback function功能介紹表**
+| Name | Arguments | Function |
+| -------- | ---- | ------- | 
+| wifi_on_connect | (void) | 處理設備成功連接到WiFi網路時的操作 |
+| wifi_error_callback | (int) `error_code`, (char *)`msg` | 處理WiFi連接過程中發生的錯誤，根據接收到的錯誤代碼和錯誤消息採取適當處理。 | 
+| mqtt_on_connect | (void) | 處理設備成功連接到MQTT時的操作 | 
+| mqtt_error_callback | (int) `error_code`, (char *)`msg` | 處理MQTT連接過程中發生的錯誤以及斷連後的操作，根據接收到的錯誤代碼和錯誤消息採取適當處理。 |
+| mqtt_get_fw_info | (struct `FW_INFO`) `receive_info` | 處理設備從MQTT成功取得韌體資訊後的操作。取得韌體資訊後可做的後續操作有OTA更新、下載韌體。 | 
+| exfw_error_callback | (int) `error_code`, (char *)`msg` | 處理檔案下載過程中發生的錯誤，根據接收到的錯誤代碼和錯誤消息採取適當處理。 |
+| exfw_download_implementation | (esp_http_client_handle_t) `fw_download_client` | 處理接收額外韌體檔案的操作，預設處理是儲存進檔案系統。若有其他需求，可以在此函數中實作。 |
+| init_error_callback | (int) `error_code`, (char) *`msg` | 處理amota32初始化過程中發生的錯誤以及斷連後的操作，根據接收到的錯誤代碼和錯誤消息採取適當處理。 |
+| fw_ver_equal | (const char *) `current_esp_fw_ver`, (const char *)`target_ver` | 處理更新韌體檔的版本與現有韌體相同的操作。 |
+| after_ota_finish | (void) | 處理ESP32 OTA更新成功後的的操作，預設處理是重新開機以切換分區。如果有其他需求，可以在此函數中實作。 |
+| after_ota_fail | (int) `error_code`, (char *)`msg` | 處理OTA更新過程中發生的錯誤，根據接收到的錯誤代碼和錯誤消息採取適當處理。 |
+| fw_params_no_specified | (struct `FW_INFO`) `receive_info` | 處理韌體資訊缺失的操作。 |
+
+
+
+Amota32提供了 `amota_callbacks_t`結構體類型用來儲存各種callback function，使用者須於 `app_main` 函數中定義一個 `amota_callbacks_t` 的實體，並將callback function賦值給實體的各個字段(如下方範例所列)，以便在程式中的不同部分使用這些callback functions。其餘無實作的callback functions預設為NULL，不影響程式運行。
+
+#### Examples
+
+```c
+//實作callback
+void wifi_connect() {
+    printf("Wi-Fi connected successfully!\n");
+}
+void mqtt_connect() {
+    printf("MQTT connected successfully!\n");
+}
+
 void app_main(void) {
-    initialize_uart(115200,UART_DATA_8_BITS,UART_PARITY_DISABLE,UART_STOP_BITS_1,UART_HW_FLOWCTRL_DISABLE,UART_SCLK_DEFAULT);
-    initialize_nvs();
-    amota32_event_group = xEventGroupCreate();
+    //定義結構體實體
+    amota_callbacks_t callbacks = {
+        .wifi_on_connect = wifi_connect,
+        .mqtt_on_connect = mqtt_connect
+        //其餘無實作的callback預設為NULL
+    };
+}
 
-    char running_partition_label[sizeof(((esp_partition_t *)0)->label)]; 
-    get_running_partition_label(running_partition_label, sizeof(running_partition_label));
-    initialize_wifi(running_partition_label);
-    while (1) {
-        EventBits_t bits = xEventGroupWaitBits(amota32_event_group,
-                                               WIFI_CONNECTED_EVENT | WIFI_DISCONNECTED_EVENT,
-                                               pdTRUE,  // 清除等待的事件標誌
-                                               pdFALSE, // 不需要等待所有事件
-                                               portMAX_DELAY);
-        if (bits & WIFI_CONNECTED_EVENT) {
-            initialize_mqtt(running_partition_label);
-            bits = xEventGroupWaitBits(amota32_event_group,
-                                       MQTT_CONNECTED_EVENT | MQTT_DISCONNECTED_EVENT,
-                                       pdTRUE,  // 清除等待的事件標誌
-                                       pdFALSE, // 不需要等待所有事件
-                                       portMAX_DELAY);
-            if (bits & MQTT_CONNECTED_EVENT) {
-                ESP_LOGI("app_main", "MQTT connected");
-                connect_and_publish_firmware_info();
-                bits = xEventGroupWaitBits(amota32_event_group,
-                                           OTA_CONFIG_FETCHED_EVENT,
-                                           pdTRUE,  // 清除等待的事件標誌
-                                           pdFALSE, // 不需要等待所有事件
-                                           portMAX_DELAY);
+```
+<br>
 
-                if (bits & OTA_CONFIG_FETCHED_EVENT) {
-                    ESP_LOGI("app_main", "OTA config fetched");
-                    ESP_LOGI("app_main", "Firmware info: server_title=%s, version=%s", shared_attributes.target_fw_server_title, shared_attributes.target_fw_ver);
+### (5) APIs
+<a name="amota_task"></a>
 
-                    start_ota(CURRENT_FIRMWARE_VERSION,shared_attributes);
-                    break; 
-                }
-            }
-        }
-        vTaskDelay(pdMS_TO_TICKS(1000)); // 避免忙碌等待
+### void amota_task(void *pvParameters);
+
+這是一支 FreeRTOS 任務，用來管理 OTA 更新及檔案系統下載的流程。要使用 Amota32 提供的 OTA 功能，您必須在應用程式啟動時建立該任務的實例。此任務透過不同的狀態來管理 Wi-Fi 連接、MQTT 連接，以及接收和處理韌體檔案資訊。
+
+**Arguments:**
+
+`pvParameter`: 創建任務時傳遞的callback structure
+
+**Returns:**
+
+- (void)
+
+**Examples:**
+
+```C
+//建立amota32_task任務實例
+
+event_group = xEventGroupCreate();
+
+amota_callbacks_t callbacks = {
+        .wifi_on_connect = wifi_connect,
+    };
+
+//第三個參數是給 task  的 stack size = 8,192*4 = 32,768 bytes // 第五個是 task priority
+xTaskCreate(&amota_task, "amota_task", 8192, (void*)&callbacks, 5, NULL);
+```
+
+<br />
+
+---
+
+<a name="amota_cli_uart_task"></a>
+
+### void amota_cli_uart_task(void *pvParameters)
+
+這是一支 FreeRTOS 任務，它的作用是為 Amota32 建立命令行介面。它會監聽 UART 的接收數據，當收到`\n`(換行符)時，會將接收到的數據傳給命令行解釋器。
+
+**Arguments:**
+
+`pvParameter`: 創建任務時傳遞的callbacks structure
+
+**Returns:**
+
+- (void)
+
+**Examples:**
+
+```C
+//建立amota_cli_uart_task任務實例，以建立CLI。
+event_group = xEventGroupCreate();
+amota_callbacks_t callbacks = {
+        .wifi_on_connect = wifi_connect,
+    };
+xTaskCreate(&amota_cli_uart_task, "amota_cli_uart_task", 10000, (void*)&callbacks, 10, NULL);
+```
+
+<br />
+
+---
+
+<a name="start_esp32_ota_update"></a>
+
+### esp_err_t start_esp32_ota_update(const char \*current_ver, struct FW_INFO esp_fw_info, amota_callbacks_t *callbacks)
+
+啟動 ESP32 OTA 更新流程。
+
+**Arguments:**
+
+`current_ver`: 指向當前韌體版本字串的指標。
+`esp_fw_info`: OTA 配置結構體，其中包含了待更新韌體的相關訊息。
+`callbacks`: 儲存callback functions的結構體
+
+**Returns:**
+
+`ESP_OK` (esp_err_t): ok
+
+**Examples:**
+
+```C
+//呼叫start_esp32_ota_update，以實際運行ESP32的OTA
+while (1) {
+    //等待來自amota_task的事件
+    EventBits_t event_bits = xEventGroupWaitBits(ota_event_group,
+                                                    OTA_UPDATE_AVAILABLE_BIT,
+                                                    pdTRUE,
+                                                    pdFALSE,
+                                                    portMAX_DELAY);
+
+    if (event_bits & OTA_UPDATE_AVAILABLE_BIT) {
+       //收到這個event bit之後，即可呼叫 做start_esp32_ota_update OTA更新
+        start_esp32_ota_update(current_ver, auo_mesh_fw_attributes);
     }
 }
 ```
-___
 
-### find_file_index_to_work(struct file_info *file_info ,int index, int label);
+<br />
 
+---
 
-#### Description：
+<a name="start_fw_downloading"></a>
 
-此函式用於從嵌入式檔案系統中讀取指定檔案並透過Uart進行傳輸。
+### esp_err_t start_fw_downloading(const char \*current_ver, struct FW_INFO extra_fw_info, amota_callbacks_t *callbacks)
 
+從 remote server 下載韌體檔案並將其寫入本地檔案系統。
 
-#### Parameters：
+**Arguments:**
 
-| Name | Type |Description |
-|-----|-----|-----|
-|`File_info`|struct |一價結構體陣列，主要儲存檔案系統的Metadata|
-|`index`|int |檔案索引，指定要讀取的檔案。|
-|`label`|int |0為讀取該索引之檔案，1為刪除該索引之檔案。|
+`current_ver`: 指向當前韌體版本字串的指標。
+`extra_fw_info`: 包含分派設備韌體檔的資訊之結構體。
+`callbacks`: 儲存callback functions的結構體
 
-#### Return value：
-No
+**Returns:**
 
-#### Sample Code：
+`ESP_OK` (esp_err_t): ok
 
-```c
-/*
-此範例假設檔案系統中index為0的位置已經儲存檔案
-*/
-#include "library.h"
+**Examples:**
 
-void app_main(void){
-    struct file_info File_info[4];
-    nvs_initialize();
-    initializespiff_s(5);
-    initialize_uart(115200,UART_DATA_8_BITS,UART_PARITY_DISABLE,UART_STOP_BITS_1,UART_HW_FLOWCTRL_DISABLE,UART_SCLK_DEFAULT);
+```C
+//呼叫start_fw_downloading，將額外的韌體檔案下載至檔案系統中
 
-    int label = 0 ; //做read的動作
-    int index = 0 ; //對index=0的檔案
-    find_file_index_to_work(File_info ,index, label); 
+while (1) {
+    //等待來自amotacli_uart_task的事件
+    EventBits_t event_bits = xEventGroupWaitBits(amota32_event_group,
+                                                    FILE_SYS_AVAILABLE_BIT,
+                                                    pdTRUE,
+                                                    pdFALSE,
+                                                    portMAX_DELAY);
 
-    
+    if (event_bits & FILE_SYS_AVAILABLE_BIT) {
+       //收到這個event bit之後，即可做檔案系統下載
+        start_fw_downloading(current_ver, auo_mesh_fw_attributes);
+    }
 }
+
 ```
-___
 
-### start_file_sys(const char *current_ver, struct shared_keys device_file_config)
+<br />
 
-#### Description：
-此函式用於從remote server下載file並將其寫入file system中。
+---
 
-#### Parameters：
+<a name="amota32_initialize"></a>
 
-| Name | Type |Description |
-|-----|-----|-----|
-|`current_ver`|const char * |指向當前韌體版本的字串指標。|
-|`device_file_config`|struct |包含檔案系統相關配置的結構體。|
+### esp_err_t amota32_initialize(init_error_callback_t init_error_handle)
 
-#### Return value：
+初始化 UART 通訊埠、NVS 系統、SPIFFS 檔案系統以及命令列介面，所有的初始化參數皆於`config.json`中配置。
 
-| Value |Type |Description |
-|-----|-----|-----|
-|`ESP_OK`|esp_err_t|ok|
+**Arguments:**
 
+`init_error_handle`：處理初始化錯誤的callback function
 
-___
+**Returns:**
 
-### initialize_uart(int baud_rate, uart_word_length_t data_bits, uart_parity_t parity, uart_stop_bits_t stop_bits, uart_hw_flowcontrol_t flow_ctrl, int intr_alloc_flags)
+- `ESP_OK` (esp_err_t): ok
 
+**Examples:**
 
-#### Description：
+```C
+//初始化，並將初始化結果返回給ret
 
-此函式用於初始化 UART 通訊端口的相關設置，包括波特率、資料位元、奇偶校驗、停止位元、流控制和中斷配置。
+amota_callbacks_t callbacks = {
+        .init_error_callback = error_handle,
+    };
 
-| Name | Type |Description |
-|-----|-----|-----|
-|`baud_rate`|int |波特率，指定 UART 通訊速率。|
-|`data_bits`| uart_word_length_t|資料位元，指定每個 UART 傳輸的資料位元數。|
-|`parity`| uart_parity_t|奇偶校驗，指定是否啟用奇偶校驗以及校驗位元的類型。|
-|`stop_bits`|uart_stop_bits_t |停止位元，指定每個 UART 傳輸的停止位元數。|
-|`flow_ctrl`|uart_hw_flowcontrol_t |流控制，指定是否啟用硬體流控制。|
-|`intr_alloc_flags`| int|中斷分配標誌，指定分配給 UART 中斷的標誌。|
+if (amota32_initialize(callbacks.init_error_callback) == ESP_OK) {
+        ESP_LOGI(TAG, "AMOTA initialization success.");
+    } else {
+        ESP_LOGE(TAG, "AMOTA initialization failed.");
+    }
 
+```
+<br />
 
 
-#### Return value：
+<a name="cli"></a>
 
-| Value |Type |Description |
-|-----|-----|-----|
-|`ESP_OK`|esp_err_t|ok|
-___
+## 4.4 Command Line Interface
 
-### initialize_nvs()
+| CLI                                                                             | 說明                                                                                                                          |
+| ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `amota ota-update [-y]`                                                         | 執行 ESP32 OTA 更新。若帶 -y 選項，系統便會直接執行更新；否則將詢問使用者是否確定要執行更新。                                 |
+| `amota ota-check`                                                               | 檢查可用的 OTA 更新(包含 ESP32 本身與額外的更新檔)。                                                                          |
+| `amota esp-version`                                                             | 顯示 ESP32 內的韌體版本。                                                                                                             |
+| `amota esp-rollback`                                                            | 將 ESP32 的韌體回滾至前一版本。                                                                                               |
+| `amota autoauth [-y\|-N]`                                                       | 設定自動授權。預設為 `N`，即不授權Amota32 自動執行 ESP32 OTA 更新，使用者每次都需要手動授權 Amota32 執行更新。 |
+| `amota list-files`                                                              | 列出暫存檔案清單及檔案索引。                                                                                                  |
+| `amota read-file --index=<index>`                                               | 根據索引來讀取指定的檔案內容。                                                                                                |
+| `amota delete-file --index=<index>`                                             | 根據索引來刪除指定的檔案                                                                                                      |
+| `amota set-wifi --ssid <ssid> --passward <password>`                            | 設定 WiFi 的 SSID 與密碼                                                                                                      |
+| `amota set-mqtt --url <broker url> --port <port> --access-token <access token>` | 設定欲連接的 MQTT 服務器 URL、port number 與設備的 access token                                                               |
+| `amota set-uart  --txd <TXD pin number> --rxd <RXD pin number>`                 | 設定 UART 所使用的 GPIO number，預設txd為GPIO 4、rxd為GPIO 5                                                                               |
+| `amota --help`                                                                  | 命令行使用說明                                                                                                                |
 
 
-#### Description：
-此函式用於初始化NVS系統，用於在ESP32上存持久性數據。
 
-#### Parameters：
-No
-
-
-#### Return value：
-
-| Value |Type |Description |
-|-----|-----|-----|
-|`ESP_OK`|esp_err_t|ok|
-___
-
-### initialize_spiffs(size_t max_file_num)
-
-#### Description：
-此函式用於初始化 SPIFFS 檔案系統，以在嵌入式設備上提供基於 Flash 的檔案存儲。
-
-
-#### Parameters：
-
-| Name | Type |Description |
-|-----|-----|-----|
-|`max_file_num`|size_t |最大檔案數量，指定檔案系統中能夠容納的最大檔案數量。|
-
-#### Return value：
-
-| Value |Type |Description |
-|-----|-----|-----|
-|`ESP_OK`|esp_err_t|ok|
-
-
-___
-
-### initialize_cli(char* main_command, size_t cmdline_max_num, size_t cmdline_max_length)
- 
-
-#### Description：
-此函式用於初始化控制台，允許用戶在設備上輸入命令。
-
-#### Parameters：
-
-| Name | Type |Description |
-|-----|-----|-----|
-|`main_command`|char* |主命令|
-|`cmdline_max_num`|size_t |最大命令行參數數量|
-|`cmdline_max_length`|size_t |最大命令行長度|
-
-#### Return value：
-
-| Value |Type |Description |
-|-----|-----|-----|
-|`ESP_OK`|esp_err_t|ok|
-
-___
-
-### nvs_operation_after_booting()
-
-#### Description：
-此函式用於在設備啟動後執行 NVS操作，獲取auto_auth和Files_info。
-
-
-#### Parameters：
-No
-
-
-___
-
-### save_file_info(struct file_info *files_info, int label)
-
-#### Description：
-將檔案訊息保存到非易失性存儲（NVS）中。
-
-
-#### Parameters：
-No
-
-#### Return value：
-
-| Value |Type |Description |
-|-----|-----|-----|
-|`ESP_OK`|esp_err_t|ok|
-
-___
-
-### add_file_info(struct file_info *files, size_t *head, size_t *tail, size_t max_count, const char *name, const char *ver, uint32_t len)
-
-#### Description：
-在files這個結構陣列中添加新的file_info。
-
-#### Parameters：
-
-| Name | Type |Description |
-|-----|-----|-----|
-|`files`|struct |structure array的指針。|
-|`head`|size_t * |structure array的頭指針，用於circular儲存。|
-|`tail`|size_t * |structure array的尾指針，用於circular儲存。|
-|`max_count`|size_t |structure array的最大容量。|
-|`name`|const char * |刪除的file_info檔名。|
-|`ver`|const char * |新加入的file_info版本。|
-|`len`|uint32_t |新加入的file_info長度。|
-
-#### Return value：
-
-| Value |Type |Description |
-|-----|-----|-----|
-|`ESP_OK`|esp_err_t|ok|
-___
-
-### delete_file_info(struct file_info *files, size_t *head, size_t *tail, size_t max_count, const char *name, const char *version)
-
-#### Description：
-
-在files這個結構陣列中刪除指定的file_info。
-
-
-#### Parameters：
-
-| Name | Type |Description |
-|-----|-----|-----|
-|`files`|struct |structure array的指針。|
-|`head`|size_t * |structure array的頭指針，用於circular儲存。|
-|`tail`|size_t * |structure array的尾指針，用於circular儲存。|
-|`max_count`| size_t|structure array的最大容量。|
-|`name`| const char *|刪除的file_info檔名。|
-|`ver`| const char *|新加入的file_info版本。|
-|`len`|uint32_t |新加入的file_info長度。|
-
-
-#### Return value：
-
-| Value |Type |Description |
-|-----|-----|-----|
-|`ESP_OK`|esp_err_t|ok|
-
-<br>
+<br />
+<br />
+<a name="Appendix"></a>
 
 # 5. Appendix
-有兩種方法可以安裝所有必須軟體：
+
+以下說明**兩種**安裝開發環境所需軟體的方法：
+
 - 整合開發環境的擴充套件(推薦)
 - 手動安裝
 
-![needed software](https://github.com/meiiiii1539/Amota32/blob/imgFolder/image/needed_software.png)
-## 5.1 使用VSCODE擴充套件
-### 1. 安裝ESP-IDF
+![needed software](https://github.com/meiiiii1539/Amota32_img/raw/main/image/needed_software.png)
 
-**STEP1. 下載擴充套件** 
-    
-![one](https://github.com/meiiiii1539/Amota32/blob/imgFolder/image/download_extension_1.png)
+<a name="VSCODE_extension"></a>
 
-**STEP2. 點選View >Command Palette，並輸入 configure esp-idf extension**     
-    
-![two](https://github.com/meiiiii1539/Amota32/blob/imgFolder/image/configure_extension_2.png)
+## 5.1 安裝 ESP-IDF：使用 VSCODE 擴充套件
 
-**STEP3. 點選Express，並選擇IDF下載來源、下載位置、toolpath位置(圖上皆為預設參數)**     
+**STEP 1:** 下載擴充套件
 
-![three](https://github.com/meiiiii1539/Amota32/blob/imgFolder/image/download_idf_setting_3.png)
+<img src="https://github.com/meiiiii1539/Amota32_img/raw/main/image/download_extension_1.png" alt="[one" style="width: 1000px; height: auto;" />
 
-**STEP4. 開始下載**    
+**STEP2:** 點選 View >Command Palette，並輸入 configure esp-idf extension
+
+<img src="https://github.com/meiiiii1539/Amota32_img/raw/main/image/configure_extension_2.png" alt="two" style="width: 1000px; height: auto;" />
+
+**STEP 3:** 點選 Express，並選擇 IDF 下載來源、下載位置、toolpath 位置 (圖中參數僅作範例)
+
+<img src="https://github.com/meiiiii1539/Amota32_img/raw/main/image/download_idf_setting_3.png" alt="three" style="width: 1000px; height: auto;" />
+
+**STEP 4:** 開始下載
 您將看到一個顯示設置進度狀態的頁面，其中包括 ESP-IDF 下載進度、ESP-IDF 工具的下載和安裝進度，以及 Python 虛擬環境的建立過程。請耐心等待一段時間。
-    
-![four](https://github.com/meiiiii1539/Amota32/blob/imgFolder/image/wait_for%20download_4.png)
-
-### 2. 導入 Amota32 專案
-
-**STEP1. 設定目標裝置**
-
-點選View >Command Palette >ESP-IDF：Set Espressif Device Target
-    
-![six](https://github.com/meiiiii1539/Amota32/blob/imgFolder/image/set_target_6.png)
-
-**STEP2. SDK配置** 
-
-點選**View >Command Palette >ESP-IDF：SDK Configuration editor**
-    
-在此可以設定WiFi帳密、MQTTs Broker URL、Broker Port Number等等
-
-![Untitled](https://github.com/meiiiii1539/Amota32/blob/imgFolder/image/sdk_conf_7-1.png)
-
-![Untitled](https://github.com/meiiiii1539/Amota32/blob/readme/image/auo_mesh_ota_conf_7-2.png)
-
-**STEP3. 編譯器配置** 
-
-`.vscode/c_cpp_properties.json`進行配置
-
-請參考[這裡](https://github.com/espressif/vscode-esp-idf-extension/blob/master/docs/C_CPP_CONFIGURATION.md)
-
-### 3. 配置硬體
-在[導入Amota專案 Step2：SDK配置](https://github.com/meiiiii1539/Amota32/tree/readme?tab=readme-ov-file#2-%E5%B0%8E%E5%85%A5-amota32-%E5%B0%88%E6%A1%88)時，我們將UART TXD與RXD分別設為4和5，這代表ESP32由UART GPIO 4 輸出數據，並由UART GPIO 5 接收數據。因此我們需要使用杜邦線連接ESP32的GRIO 4與UART2USB bridge的RXD，還有連接ESP32的GRIO 5與UART2USB bridge的TXD，如下圖所示，這樣用戶就可以透過序列埠傳送命令給ESP32，ESP32可以此輸出資料。
-
-![HW_安裝](https://github.com/meiiiii1539/Amota32/blob/readme/image/hw_install.jpg)
 
 
-## 5.2 手動安裝
-對於手動過程，請根據您的作業系統進行選擇。
+<img src="https://github.com/meiiiii1539/Amota32_img/raw/main/image/wait_for%20download_4.png" alt="four" style="width: 1000px; height: auto;" />
+
+<br />
+
+<a name="Manual"></a>
+
+## 5.2 安裝 ESP-IDF：手動安裝
+
+請根據您的作業系統進行手動安裝，請參考官方文件：
+
 - [Windows](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/get-started/windows-setup.html)
 - [Linux/MacOs](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/get-started/linux-macos-setup.html)
 
-<br>
+<br />
+
+<a name="Hardware_detail"></a>
+
+## 5.3. 配置硬體
+
+在 [4.1 Configuration：SDK Configuration](#SDK_config) 的說明裡，我們將 ESP32 UART 的 TXD/RXD 分別設置到對應腳位 GPIO 4/GPIO 5，因此實體線路須如下圖所示，使用杜邦線將 TXD (GPIO 4) 連接到 USB-to-UART Bridge 的 RXD，以及將 RXD (GPIO 5) 連接到 Bridge 的 TXD。如此，上位機便可以通過串列埠和 Amota32 的命令行介面進行通訊互動。
 
 
+<img src="https://github.com/meiiiii1539/Amota32_img/raw/main/image/hw_install.png" alt="HW_安裝" style="width: 500px; height: auto;" />
 
-
+#### 簡單示意圖
+<img src="https://github.com/meiiiii1539/Amota32_img/raw/main/image/txdrxd.png" alt="HW_安裝" style="width: 500px; height: auto;" />
